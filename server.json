@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pipeworx-io/estonia-business-register",
+  "title": "Estonia Business Register",
+  "description": "estonia-business-register -- Estonia's e-Business Register, published as",
+  "version": "0.1.0",
+  "websiteUrl": "https://pipeworx.io/packs/estonia-business-register",
+  "repository": {
+    "url": "https://github.com/pipeworx-io/mcp-estonia-business-register",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://gateway.pipeworx.io/estonia-business-register/mcp"
+    }
+  ]
+}
