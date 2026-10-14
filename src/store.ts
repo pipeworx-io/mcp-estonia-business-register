@@ -67,6 +67,33 @@ export function normalizeName(s: unknown): string {
     .trim();
 }
 
+/** Estonian legal forms as they appear in registered names, normalized. RIK
+ *  stores some names with the form spelled out as a PREFIX ("aktsiaselts
+ *  TALLINNA SADAM") and most with an abbreviation as a suffix ("Bolt
+ *  Technology OÜ"), so a caller's "Tallinna Sadam AS" shares no prefix with
+ *  the stored row (fleet #3021). The query side strips these; the stored
+ *  name_norm still carries them, so searchByNameAnyForm also scans each
+ *  spelled-out prefix. */
+export const LEGAL_FORMS_SPELLED = [
+  'AKTSIASELTS',
+  'OSAUHING',
+  'MITTETULUNDUSUHING',
+  'SIHTASUTUS',
+  'TULUNDUSUHISTU',
+  'USALDUSUHING',
+  'TAISUHING',
+];
+const LEGAL_FORM_TOKENS = new Set([...LEGAL_FORMS_SPELLED, 'AS', 'OU', 'MTU', 'SA', 'TUH', 'UU', 'TU']);
+
+/** A normalized name with leading/trailing legal-form tokens removed. Never
+ *  strips to empty: a query that is only a legal form is returned as-is. */
+export function stripLegalForm(nameNorm: string): string {
+  const tokens = nameNorm.split(' ').filter(Boolean);
+  while (tokens.length > 1 && LEGAL_FORM_TOKENS.has(tokens[0])) tokens.shift();
+  while (tokens.length > 1 && LEGAL_FORM_TOKENS.has(tokens[tokens.length - 1])) tokens.pop();
+  return tokens.join(' ');
+}
+
 export const STATUS_LABELS: Record<string, string> = {
   R: 'Registered (active)',
   L: 'In liquidation',
@@ -126,6 +153,35 @@ export async function searchByName(
   params.push(limit);
   const r = await db.prepare(sql).bind(...params).all<CompanyRow>();
   return r.results;
+}
+
+/** Name-prefix search that ignores the legal form on both sides: the query as
+ *  typed, the query with its legal form stripped, and that core under every
+ *  spelled-out prefix form. Rows whose own name minus its legal form equals
+ *  the core rank first, so "Tallinna Sadam" puts "aktsiaselts TALLINNA
+ *  SADAM" ahead of "Tallinna Sadam Tööliste Ametiühing". */
+export async function searchByNameAnyForm(
+  db: D1Like,
+  queryNorm: string,
+  statusCode: string | null,
+  limit: number,
+): Promise<CompanyRow[]> {
+  const core = stripLegalForm(queryNorm);
+  const prefixes = [...new Set([queryNorm, core, ...LEGAL_FORMS_SPELLED.map((f) => `${f} ${core}`)])];
+  const batches = await Promise.all(prefixes.map((p) => searchByName(db, p, statusCode, limit)));
+  const seen = new Set<string>();
+  const merged: CompanyRow[] = [];
+  for (const row of batches.flat()) {
+    if (seen.has(row.registry_code)) continue;
+    seen.add(row.registry_code);
+    merged.push(row);
+  }
+  const rank = (r: CompanyRow) => {
+    const own = stripLegalForm(r.name_norm);
+    return own === core ? 0 : own.startsWith(core) ? 1 : 2;
+  };
+  merged.sort((a, b) => rank(a) - rank(b) || (a.name_norm < b.name_norm ? -1 : a.name_norm > b.name_norm ? 1 : 0));
+  return merged.slice(0, limit);
 }
 
 export interface ActivityRow {

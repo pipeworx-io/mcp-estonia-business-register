@@ -66,7 +66,7 @@ import {
   reportYearsOf,
   requireDb,
   salesBreakdownOf,
-  searchByName,
+  searchByNameAnyForm,
 } from './store.js';
 
 const tools: McpToolExport['tools'] = [
@@ -86,7 +86,7 @@ const tools: McpToolExport['tools'] = [
   {
     name: 'ee_company_search',
     description:
-      "Search Estonia's e-Business Register (RIK open data) by the start of a company's current name, optionally filtered by registration status. Prefix match only (\"Bolt\" finds \"Bolt Technology OÜ\" but not \"EuroBolt OÜ\"); diacritic-insensitive, so plain-ASCII and Estonian spellings both work. Use for \"find Estonian companies named Bolt...\" or to get a registry code to pass to ee_company.",
+      "Search Estonia's e-Business Register (RIK open data) by the start of a company's current name, optionally filtered by registration status. Prefix match only (\"Bolt\" finds \"Bolt Technology OÜ\" but not \"EuroBolt OÜ\"); diacritic-insensitive, so plain-ASCII and Estonian spellings both work; the legal form is optional and can sit either side (\"Tallinna Sadam\", \"Tallinna Sadam AS\" and \"AS Tallinna Sadam\" all find \"aktsiaselts TALLINNA SADAM\"), and the company whose name matches exactly apart from its legal form is listed first. Use for \"find Estonian companies named Bolt...\" or to get a registry code to pass to ee_company.",
     summary: "Search Estonia's e-Business Register by name prefix, optionally filtered by status.",
     inputSchema: {
       type: 'object' as const,
@@ -219,7 +219,7 @@ async function searchTool(db: D1Like, args: Record<string, unknown>) {
   const statusCode = statusArg ? STATUS_CODE_OF[statusArg] ?? null : null;
   const limit = clamp(args.limit, 1, 100, 20);
   const asOf = await dataAsOf(db);
-  const rows = await searchByName(db, normalizeName(name), statusCode, limit);
+  const rows = await searchByNameAnyForm(db, normalizeName(name), statusCode, limit);
   return {
     name,
     status: statusArg,
