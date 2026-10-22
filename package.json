@@ -1,6 +1,6 @@
 {
   "name": "@pipeworx/mcp-estonia-business-register",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "estonia-business-register -- Estonia's e-Business Register, published as open data by RIK (Estonian Centre of Registers and Information Systems): every registered, liquidating or bankrupt entity's identity, legal form, status and address, its currently reported activity areas (EMTAK/NACE), and…",
   "type": "module",
   "main": "src/index.ts",
@@ -26,7 +26,7 @@
     "@cloudflare/workers-types": "^4.20260405.1"
   },
   "pipeworx": {
-    "sourceHash": "v1-f7677244ceb079e01da02108c6ec9783cd5b45fa996262645b41c63ba949b373",
-    "sourceCommit": "4f465027cf3de54acf4976d8118ae3423a8ec9fa"
+    "sourceHash": "v1-d3278fe90d962e5d20eaefb3f35c16831b0557a883d9610391871a6b6cda9477",
+    "sourceCommit": "712a5e0171ea24483214329d0cd7efdfd9b80352"
   }
 }

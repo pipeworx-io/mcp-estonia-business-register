@@ -6,7 +6,7 @@ or bankrupt entity's identity, legal form, status and address, its currently
 reported activity areas (EMTAK/NACE), and selected financial indicators and
 sales-by-activity breakdowns from filed annual reports. Fleet #2927.
 
-Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents to 1800+ live data sources. This is an independent, unofficial integration — not affiliated with, endorsed by, or published by the upstream provider.
+Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents to 1866+ live data sources. This is an independent, unofficial integration — not affiliated with, endorsed by, or published by the upstream provider.
 
 RIK publishes no live per-record API — only bulk open-data files — so
 Pipeworx keeps a daily-refreshed copy of the register.
@@ -33,9 +33,24 @@ Pipeworx keeps a daily-refreshed copy of the register.
   filed reports (seen for some large/group filers) carry metadata but no
   matching figures in RIK's extract; the report row still answers, with
   null figures, rather than a silent empty result.
+- `ee_beneficial_owners(registry_code?, name?)` — an entity's beneficial
+  owners: each owner's name, date of birth and nationality exactly as the
+  register itself shows them, the manner in which control is exercised
+  (direct/indirect ownership etc.), and the start date of that holding.
+  Unlike the other tools here, this is read **live, per request**, from the
+  register's own public page -- RIK's bulk open-data extracts do not carry
+  beneficial-owner data at all, only the per-company page does, so
+  `data_as_of` reflects RIK's own last-updated date for that page's
+  beneficial-owners section, not the daily mirror refresh. Fleet #3332,
+  Bruce's build-names ruling (CLAUDE.md "What we will source" -> personal
+  data). Anyone named here can request removal at support@pipeworx.io; a
+  removal already on file is silently withheld and counted in
+  `withheld_by_removal_request`.
 
 Every response carries `data_as_of` (the day the mirror was last
-refreshed), `source` and (where licence terms apply) `licence`.
+refreshed, or -- for `ee_beneficial_owners` only -- the day RIK itself last
+updated that page's beneficial-owners section), `source` and (where
+licence terms apply) `licence`.
 
 ### Matching a renamed entity
 
@@ -67,6 +82,16 @@ Keyless. The tools answer only through the Pipeworx gateway, which holds
 the copy of the register; a standalone `npm install` has no data to read,
 and every tool throws a clear "not bound in this runtime" error there
 instead of returning an empty list.
+
+## Personal data (ee_beneficial_owners only)
+
+Beneficial owners' names, dates of birth and nationality are served under
+Bruce's build-names ruling (fleet #3329/#3332, verified live and free of
+login 2026-10-18/19). A shared removal mechanism
+(`@pipeworx/shared`'s `applyRemovals`, the same one `sos-entities` uses
+under the 2026-10-08 names-and-roles ruling) withholds any name on request
+to support@pipeworx.io. No address of any kind is on RIK's page; this pack
+never collects or serves one.
 
 ## Data sources
 
@@ -152,7 +177,7 @@ directly, instead of just this one's:
 }
 ```
 
-Both URLs reach the same gateway and the same 1800+ data sources. The
+Both URLs reach the same gateway and the same 1866+ data sources. The
 only difference is which pack's tools are listed **directly**; `ask_pipeworx`
 reaches all of them from either one.
 

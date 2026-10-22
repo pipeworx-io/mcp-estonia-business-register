@@ -68,6 +68,7 @@ import {
   salesBreakdownOf,
   searchByNameAnyForm,
 } from './store.js';
+import { fetchBeneficialOwners } from './beneficial-owners.js';
 
 const tools: McpToolExport['tools'] = [
   {
@@ -110,6 +111,19 @@ const tools: McpToolExport['tools'] = [
         year: { type: 'string', description: 'Report year, e.g. "2024". Omit to list every year with a filed report.' },
       },
       required: ['registry_code'],
+    },
+  },
+  {
+    name: 'ee_beneficial_owners',
+    description:
+      "An Estonian entity's beneficial owners (Estonia's e-Business Register, published by RIK, the Estonian Centre of Registers and Information Systems) by registry code or exact current name: each owner's name, date of birth and nationality EXACTLY as the register itself shows them, the manner in which control is exercised (direct/indirect ownership etc.), and the start date of that holding. RIK marks this data as informative rather than authoritative, and the register carries no live per-record API for it -- this tool reads the register's own public company page, live, per request, so data_as_of reflects RIK's own last-updated date for the beneficial-owners section specifically. Anyone named here can request removal at support@pipeworx.io; a removal already on file is silently withheld and counted in withheld_by_removal_request.",
+    summary: "An Estonian entity's beneficial owners (name, DOB, nationality, manner of control) from RIK's own public page, live per request.",
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        registry_code: { type: 'string', description: 'Estonian registry code (ariregistri kood), e.g. "11056239".' },
+        name: { type: 'string', description: 'Exact current registered name. Use ee_company_search first for a partial match, or pass registry_code directly if known.' },
+      },
     },
   },
 ];
@@ -343,6 +357,59 @@ async function annualReportTool(db: D1Like, args: Record<string, unknown>) {
   };
 }
 
+/** Resolve registry_code/name to a registry code + (when known) the
+ *  company's current name, reusing the same D1 lookup the other tools use --
+ *  so "name" behaves identically everywhere in this pack. A name that does
+ *  not resolve still falls through to a direct registry_code lookup when one
+ *  was ALSO given; it only fails when neither resolves. */
+async function resolveBeneficialOwnersTarget(
+  db: D1Like,
+  args: Record<string, unknown>,
+): Promise<{ registryCode: string; companyName: string | null } | { error: Record<string, unknown> }> {
+  const code = args.registry_code != null && args.registry_code !== '' ? String(args.registry_code).trim() : null;
+  const name = args.name != null && args.name !== '' ? String(args.name).trim() : null;
+  if (!code && !name) {
+    return { error: { found: false, reason: 'missing_argument', message: 'Pass registry_code or name.', data_as_of: null, source: SOURCE } };
+  }
+  if (code) return { registryCode: code, companyName: null };
+
+  const nameNorm = normalizeName(name);
+  const rows = await findByNameExact(db, nameNorm);
+  if (!rows.length) {
+    return {
+      error: {
+        found: false,
+        reason: 'not_found',
+        name,
+        message: `No entity in the e-Business Register currently has the exact registered name ${JSON.stringify(name)}.`,
+        hint: 'A company that was later RENAMED will not match its former name here -- try the registry code if known, or use ee_company_search for a partial match.',
+        data_as_of: await dataAsOf(db),
+        source: SOURCE,
+      },
+    };
+  }
+  if (rows.length > 1) {
+    return {
+      error: {
+        found: false,
+        reason: 'ambiguous',
+        name,
+        message: `${rows.length} entities share the exact registered name ${JSON.stringify(name)}.`,
+        candidates: rows.map((r) => ({ registry_code: r.registry_code, name: r.name, status_code: r.status_code })),
+        data_as_of: await dataAsOf(db),
+        source: SOURCE,
+      },
+    };
+  }
+  return { registryCode: rows[0]!.registry_code, companyName: rows[0]!.name };
+}
+
+async function beneficialOwnersTool(db: D1Like, args: Record<string, unknown>) {
+  const resolved = await resolveBeneficialOwnersTarget(db, args);
+  if ('error' in resolved) return resolved.error;
+  return fetchBeneficialOwners(resolved.registryCode, resolved.companyName);
+}
+
 async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   const db = requireDb(args._d1);
   switch (name) {
@@ -352,6 +419,8 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       return searchTool(db, args);
     case 'ee_annual_report_stats':
       return annualReportTool(db, args);
+    case 'ee_beneficial_owners':
+      return beneficialOwnersTool(db, args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
