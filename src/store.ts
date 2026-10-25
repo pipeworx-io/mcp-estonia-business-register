@@ -165,7 +165,7 @@ export async function searchByNameAnyForm(
   queryNorm: string,
   statusCode: string | null,
   limit: number,
-): Promise<CompanyRow[]> {
+): Promise<{ rows: CompanyRow[]; matchMode: 'prefix' | 'substring' }> {
   const core = stripLegalForm(queryNorm);
   const prefixes = [...new Set([queryNorm, core, ...LEGAL_FORMS_SPELLED.map((f) => `${f} ${core}`)])];
   const batches = await Promise.all(prefixes.map((p) => searchByName(db, p, statusCode, limit)));
@@ -181,7 +181,23 @@ export async function searchByNameAnyForm(
     return own === core ? 0 : own.startsWith(core) ? 1 : 2;
   };
   merged.sort((a, b) => rank(a) - rank(b) || (a.name_norm < b.name_norm ? -1 : a.name_norm > b.name_norm ? 1 : 0));
-  return merged.slice(0, limit);
+  if (merged.length > 0) return { rows: merged.slice(0, limit), matchMode: 'prefix' };
+  // Nothing starts with the query: one bounded substring pass, so a word in
+  // the middle of a name ("Arendused" in "... Tallinna Arendused") can match.
+  // Weaker ranking, and the caller is told via match_mode.
+  const needle = core || queryNorm;
+  if (needle.length < 3) return { rows: [], matchMode: 'prefix' };
+  const esc = needle.replace(/[\\%_]/g, (c) => '\\' + c);
+  const params: unknown[] = ['%' + esc + '%'];
+  let sql = `SELECT ${COMPANY_COLS} FROM ee_companies WHERE name_norm LIKE ? ESCAPE '\\'`;
+  if (statusCode) {
+    sql += ` AND status_code = ?`;
+    params.push(statusCode);
+  }
+  sql += ` ORDER BY name_norm LIMIT ?`;
+  params.push(limit);
+  const sub = await db.prepare(sql).bind(...params).all<CompanyRow>();
+  return { rows: sub.results, matchMode: sub.results.length ? 'substring' : 'prefix' };
 }
 
 export interface ActivityRow {

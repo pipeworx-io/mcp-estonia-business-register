@@ -6,7 +6,7 @@ or bankrupt entity's identity, legal form, status and address, its currently
 reported activity areas (EMTAK/NACE), and selected financial indicators and
 sales-by-activity breakdowns from filed annual reports. Fleet #2927.
 
-Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents to 1866+ live data sources. This is an independent, unofficial integration — not affiliated with, endorsed by, or published by the upstream provider.
+Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents to 1879+ live data sources. This is an independent, unofficial integration — not affiliated with, endorsed by, or published by the upstream provider.
 
 RIK publishes no live per-record API — only bulk open-data files — so
 Pipeworx keeps a daily-refreshed copy of the register.
@@ -20,9 +20,12 @@ Pipeworx keeps a daily-refreshed copy of the register.
   match by name — look it up by registry code instead. For partial names,
   use `ee_company_search` first.
 - `ee_company_search(name, status?, limit?)` — search by the start of a
-  company's current name (prefix match only — "Bolt" finds "Bolt Technology
-  OÜ" but not "EuroBolt OÜ"), diacritic-insensitive, optionally filtered by
-  registration status.
+  company's current name ("Bolt" finds "Bolt Technology OÜ" but not
+  "EuroBolt OÜ"), diacritic-insensitive, optionally filtered by registration
+  status (`registered`, `liquidation`, `bankrupt`; case-insensitive, `active`
+  = registered; anything else is refused naming the valid values). When
+  nothing starts with the text, one weaker contains-the-text pass runs and the
+  response says `match_mode: "substring"`.
 - `ee_annual_report_stats(registry_code, year?)` — from filed annual
   reports: pass `registry_code` alone to list every year with a filed
   report (submission date, audited flag, filer-size category); add `year`
@@ -177,7 +180,7 @@ directly, instead of just this one's:
 }
 ```
 
-Both URLs reach the same gateway and the same 1866+ data sources. The
+Both URLs reach the same gateway and the same 1879+ data sources. The
 only difference is which pack's tools are listed **directly**; `ask_pipeworx`
 reaches all of them from either one.
 

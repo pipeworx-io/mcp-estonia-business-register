@@ -3,7 +3,7 @@
   "name": "io.github.pipeworx-io/estonia-business-register",
   "title": "Estonia Business Register",
   "description": "estonia-business-register -- Estonia's e-Business Register, published as open data by RIK…",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "websiteUrl": "https://pipeworx.io/packs/estonia-business-register",
   "repository": {
     "url": "https://github.com/pipeworx-io/mcp-estonia-business-register",

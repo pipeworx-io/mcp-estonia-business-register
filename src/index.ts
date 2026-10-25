@@ -87,13 +87,13 @@ const tools: McpToolExport['tools'] = [
   {
     name: 'ee_company_search',
     description:
-      "Search Estonia's e-Business Register (RIK open data) by the start of a company's current name, optionally filtered by registration status. Prefix match only (\"Bolt\" finds \"Bolt Technology OÜ\" but not \"EuroBolt OÜ\"); diacritic-insensitive, so plain-ASCII and Estonian spellings both work; the legal form is optional and can sit either side (\"Tallinna Sadam\", \"Tallinna Sadam AS\" and \"AS Tallinna Sadam\" all find \"aktsiaselts TALLINNA SADAM\"), and the company whose name matches exactly apart from its legal form is listed first. Use for \"find Estonian companies named Bolt...\" or to get a registry code to pass to ee_company.",
+      "Search Estonia's e-Business Register (RIK open data) by the start of a company's current name, optionally filtered by registration status (registered, liquidation or bankrupt; any other value is refused, not ignored). Prefix match first (\"Bolt\" finds \"Bolt Technology OÜ\" but not \"EuroBolt OÜ\"); only when nothing starts with the text does it fall back to a weaker contains-the-text pass and report match_mode:'substring'; diacritic-insensitive, so plain-ASCII and Estonian spellings both work; the legal form is optional and can sit either side (\"Tallinna Sadam\", \"Tallinna Sadam AS\" and \"AS Tallinna Sadam\" all find \"aktsiaselts TALLINNA SADAM\"), and the company whose name matches exactly apart from its legal form is listed first. Use for \"find Estonian companies named Bolt...\" or to get a registry code to pass to ee_company.",
     summary: "Search Estonia's e-Business Register by name prefix, optionally filtered by status.",
     inputSchema: {
       type: 'object' as const,
       properties: {
         name: { type: 'string', description: 'Start of the company\'s current registered name, e.g. "Bolt".' },
-        status: { type: 'string', enum: ['registered', 'liquidation', 'bankrupt'], description: 'Filter by registration status.' },
+        status: { type: 'string', enum: ['registered', 'liquidation', 'bankrupt', 'active'], description: 'Filter by registration status. "active" is a synonym for "registered". Case-insensitive; any other value is refused with the valid list.' },
         limit: { type: 'number', description: 'Maximum results (1-100, default 20).' },
       },
       required: ['name'],
@@ -134,6 +134,9 @@ function clamp(v: unknown, lo: number, hi: number, d: number): number {
 }
 
 const STATUS_CODE_OF: Record<string, string> = { registered: 'R', liquidation: 'L', bankrupt: 'N' };
+/** 'active' is the word the status label itself uses ("Registered (active)"). */
+const STATUS_ALIASES: Record<string, string> = { active: 'registered' };
+const LEGAL_STATUS_VALUES = Object.keys(STATUS_CODE_OF);
 
 async function companyPayload(db: D1Like, row: Awaited<ReturnType<typeof findByCode>>) {
   if (!row) throw new Error('companyPayload called with no row');
@@ -230,13 +233,23 @@ async function searchTool(db: D1Like, args: Record<string, unknown>) {
   const name = String(args.name ?? '').trim();
   if (!name) throw new Error('name is required');
   const statusArg = args.status != null && args.status !== '' ? String(args.status) : null;
-  const statusCode = statusArg ? STATUS_CODE_OF[statusArg] ?? null : null;
+  let statusCode: string | null = null;
+  if (statusArg) {
+    const key = statusArg.trim().toLowerCase();
+    statusCode = STATUS_CODE_OF[STATUS_ALIASES[key] ?? key] ?? null;
+    if (!statusCode) {
+      throw new Error(
+        `Unknown status ${JSON.stringify(statusArg)}. Valid values: ${LEGAL_STATUS_VALUES.join(', ')} (case-insensitive; 'active' is accepted for registered). Omit status to search all.`,
+      );
+    }
+  }
   const limit = clamp(args.limit, 1, 100, 20);
   const asOf = await dataAsOf(db);
-  const rows = await searchByNameAnyForm(db, normalizeName(name), statusCode, limit);
+  const { rows, matchMode } = await searchByNameAnyForm(db, normalizeName(name), statusCode, limit);
   return {
     name,
-    status: statusArg,
+    status: statusArg ? statusArg.trim().toLowerCase() : null,
+    match_mode: matchMode,
     returned: rows.length,
     results: rows.map((r) => ({
       registry_code: r.registry_code,
@@ -249,7 +262,7 @@ async function searchTool(db: D1Like, args: Record<string, unknown>) {
       ? {
           found: false,
           reason: 'no_match',
-          hint: 'Prefix match only -- try a shorter start of the name, or check spelling/diacritics.',
+          hint: 'No name starts with, or contains, that text -- check spelling/diacritics or try a shorter fragment.',
         }
       : {}),
     data_as_of: asOf,
